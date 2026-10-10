@@ -5,10 +5,10 @@ from pathlib import Path
 
 import numpy as np
 import optuna
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from scipy.stats import t
 
-mcp = FastMCP("restricted-analyzer")
+mcp = MCPServer("restricted-analyzer")
 CONFIG_PATH = os.environ.get("FRONTIER_CONFIG", "configs/demo.json")
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -49,7 +49,7 @@ def numeric_summary(values: list[float]) -> dict:
 
 
 @mcp.tool()
-def summarize(rows_json: str) -> str:
+async def summarize(rows_json: str) -> str:
     rows = json.loads(rows_json)
     if not isinstance(rows, list):
         raise ValueError("Se esperaba una lista de resultados.")
@@ -90,7 +90,7 @@ def summarize(rows_json: str) -> str:
 
 
 @mcp.tool()
-def suggest(history_json: str) -> str:
+async def suggest(history_json: str) -> str:
     history = json.loads(history_json)
     config = load_config()
     variables = config.get("variables", {})

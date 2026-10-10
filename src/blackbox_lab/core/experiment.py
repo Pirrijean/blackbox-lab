@@ -25,9 +25,21 @@ ScalarValue: TypeAlias = str | int | float | bool | None
 
 class VariableDef(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    # Protocol inputs are scalars.  Nested mutable objects are deliberately not
-    # accepted: an experiment must not change after it is authorised.
+    # Protocol inputs are strictly scalars. Nested mutable objects are deliberately rejected:
+    # an experiment must not be mutated after it is authorised.
     values: tuple[ScalarValue, ...] = Field(..., min_length=1)
+
+    @field_validator("values", mode="before")
+    @classmethod
+    def reject_mutable_or_nested(cls, values):
+        if not isinstance(values, (list, tuple)):
+            raise ValueError("Las variables deben ser una secuencia.")
+        for v in values:
+            if isinstance(v, (list, dict, set)):
+                raise ValueError("No se admiten colecciones anidadas mutables en las variables.")
+            if not isinstance(v, (str, int, float, bool, type(None))):
+                raise ValueError(f"Tipo de valor no soportado en variables: {type(v)}")
+        return tuple(values)
 
     @field_validator("values")
     @classmethod

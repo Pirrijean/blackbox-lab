@@ -3,14 +3,12 @@
     "description": "Ejecuta algoritmos de optimización de caja negra para proponer el siguiente experimento, aislado en Docker.",
     "type": "mcp_server",
     "execution": {
-        "command": "docker",
+        "command": "uv",
         "args": [
             "run",
-            "-i",
-            "--rm",
-            "-v",
-            "./data:/app/data",
-            "ghcr.io/optuna/optuna-mcp:latest"
+            "python",
+            "-m",
+            "blackbox_lab.mcp_servers.analyzer_optimizer"
         ]
     }
 }

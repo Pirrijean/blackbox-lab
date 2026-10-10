@@ -3,9 +3,12 @@
     "description": "Realiza peticiones HTTP (GET, POST) a APIs o servicios externos para recopilar datos experimentales sin ejecutar código arbitrario.",
     "type": "mcp_server",
     "execution": {
-        "command": "uvx",
+        "command": "uv",
         "args": [
-            "mcp-server-fetch"
+            "run",
+            "python",
+            "-m",
+            "blackbox_lab.mcp_servers.query_server"
         ]
     }
 }

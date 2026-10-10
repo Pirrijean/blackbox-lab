@@ -89,6 +89,10 @@ class BudgetManager:
             self.limit_usd - self.confirmed_spend_usd - self.reserved_spend_usd,
         )
 
+    @property
+    def is_breached(self) -> bool:
+        return self.breached
+
     @contextmanager
     def _exclusive_lock(self) -> Iterator[None]:
         """Take an O_EXCL lock that works across local Python processes."""
@@ -167,17 +171,19 @@ class BudgetManager:
 
             reserved = self.reservations.pop(reservation_id)
             self.reserved_spend_usd -= reserved
-            self.confirmed_spend_usd += spent
+            new_confirmed = self.confirmed_spend_usd + spent
+            overrun = spent > reserved or new_confirmed > self.limit_usd
+            if overrun:
+                self.breached = True
+                self._persist_state_locked()
+                raise BudgetExceededError(
+                    f"El coste real ({spent}) superó la reserva ({reserved}) o el límite ({self.limit_usd}); ledger bloqueado."
+                )
+
+            self.confirmed_spend_usd = new_confirmed
             self.calls_completed += 1
             self.tokens_consumed += tokens_used
-            overrun = spent > reserved or self.confirmed_spend_usd > self.limit_usd
-            self.breached = self.breached or overrun
             self._persist_state_locked()
-
-            if overrun:
-                raise BudgetExceededError(
-                    "El coste real superó la reserva o el límite; ledger bloqueado."
-                )
 
     def release_before_dispatch(self, reservation_id: str) -> None:
         """Release only when the caller can prove that no request was sent."""

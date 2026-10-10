@@ -20,12 +20,12 @@ El agente constructor debe conectar estos servidores MCP para separar la ejecuci
 {
   "mcpServers": {
     "optuna-optimizer": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "./data:/app/data", "ghcr.io/optuna/optuna-mcp:latest"]
+      "command": "uv",
+      "args": ["run", "python", "-m", "blackbox_lab.mcp_servers.analyzer_optimizer"]
     },
     "fetch-api": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-fetch"]
+      "command": "uv",
+      "args": ["run", "python", "-m", "blackbox_lab.mcp_servers.query_server"]
     }
   }
 }

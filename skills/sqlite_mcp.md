@@ -8,7 +8,7 @@ Servidor Model Context Protocol (MCP) oficial para la gestión de bases de datos
 
 ## Comando de Ejecución
 ```bash
-npx -y @modelcontextprotocol/server-sqlite --db-path ./data/blackbox_metadata.db
+uv run python main.py doctor
 ```
 
 ## Reglas de Seguridad y Restricciones

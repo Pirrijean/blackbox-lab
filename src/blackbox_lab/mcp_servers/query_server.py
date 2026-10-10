@@ -1,12 +1,14 @@
 import asyncio
+import ipaddress
 import json
 import os
+import socket
 from pathlib import Path
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
-mcp = FastMCP("restricted-query")
+mcp = MCPServer("restricted-query")
 CONFIG_PATH = os.environ.get("FRONTIER_CONFIG", "configs/demo.json")
 
 
@@ -15,6 +17,25 @@ def load_config() -> dict:
     if not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def is_safe_target_host(hostname: str) -> bool:
+    try:
+        addresses = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+        for _family, _kind, _proto, _canonname, sockaddr in addresses:
+            addr = ipaddress.ip_address(sockaddr[0].split("%", 1)[0])
+            if (
+                not addr.is_global
+                or addr.is_multicast
+                or addr.is_loopback
+                or addr.is_private
+                or addr.is_reserved
+                or addr.is_link_local
+            ):
+                return False
+        return True
+    except Exception:
+        return False
 
 
 @mcp.tool()
@@ -41,6 +62,13 @@ async def query(payload_json: str) -> str:
         if not url:
             raise ValueError("URL de destino HTTP no configurada.")
 
+        from urllib.parse import urlsplit
+        parsed_url = urlsplit(url)
+        if parsed_url.scheme not in ("http", "https"):
+            raise ValueError("Esquema de URL no permitido.")
+        if not parsed_url.hostname or not is_safe_target_host(parsed_url.hostname):
+            raise ValueError("Destino HTTP privado o no permitido por política de seguridad.")
+
         method = target.get("method", "POST")
         timeout_s = float(target.get("timeout_seconds", 10.0))
 
@@ -59,6 +87,9 @@ async def query(payload_json: str) -> str:
                 resp = await client.get(url, params=payload, headers=headers)
             else:
                 resp = await client.post(url, json=payload, headers=headers)
+
+            if len(resp.content) > 1_000_000:
+                return json.dumps({"ok": False, "status": "blocked", "reason": "Respuesta excede el límite de 1MB"})
 
             if resp.status_code == 429 or resp.status_code >= 500:
                 return json.dumps({"ok": False, "status": "transient"})

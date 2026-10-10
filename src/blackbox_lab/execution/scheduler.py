@@ -180,6 +180,10 @@ class ExperimentScheduler:
             )
 
         for index, case in enumerate(checkpoint.cases):
+            completed = sum(item.state == CaseState.SUCCEEDED for item in checkpoint.cases)
+            if completed >= self.config.budget.max_cases:
+                break
+
             if case.state == CaseState.SUCCEEDED:
                 continue
             if case.state != CaseState.PENDING:
@@ -204,7 +208,7 @@ class ExperimentScheduler:
                 )
                 return self._result(checkpoint, ExecutionState.BLOCKED, "Presupuesto agotado antes de emitir una consulta.")
 
-            request_id = f"req_{uuid.uuid4().hex}"
+            request_id = f"req_{uuid.uuid5(uuid.NAMESPACE_URL, f'{run_id}:{case.case_id}:{case.attempts}')}"
             input_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{run_id}:{case.case_id}"))
             reserved_case = case.model_copy(
                 update={
