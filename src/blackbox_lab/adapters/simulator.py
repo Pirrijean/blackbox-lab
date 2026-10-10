@@ -17,7 +17,9 @@ class DeterministicSimulatorAdapter(TargetAdapter):
         self.target_y = target_y
         self.total_invocations = 0
 
-    async def execute(self, observation: InputObservation) -> OutputObservation:
+    async def execute(
+        self, observation: InputObservation, *, request_id: str
+    ) -> OutputObservation:
         self.total_invocations += 1
         payload = observation.payload
 

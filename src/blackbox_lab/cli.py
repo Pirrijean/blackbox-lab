@@ -1,12 +1,15 @@
 import argparse
 import asyncio
+import os
 import sys
+import time
 
 from blackbox_lab.adapters.simulator import DeterministicSimulatorAdapter
 from blackbox_lab.core.contracts import BudgetPolicy, SecurityPolicy
 from blackbox_lab.core.experiment import ExperimentConfig, Hypothesis, VariableDef
 from blackbox_lab.core.metrics import calculate_metrics
 from blackbox_lab.doctor import run_doctor
+from blackbox_lab.execution.evidence import EvidenceStore
 from blackbox_lab.execution.scheduler import ExperimentScheduler
 
 
@@ -21,7 +24,8 @@ def parse_args():
     subparsers.add_parser("doctor", help="Comprueba el entorno local y dependencias")
 
     # run-simulation
-    subparsers.add_parser("run-simulation", help="Ejecuta un experimento local determinista con evidencia y métricas")
+    sim_parser = subparsers.add_parser("run-simulation", help="Ejecuta un experimento local determinista con evidencia y métricas")
+    sim_parser.add_argument("--run-id", default=None, help="Identificador único de ejecución (opcional)")
 
     # inspect-metrics
     metrics_parser = subparsers.add_parser("inspect-metrics", help="Calcula métricas estadísticas con distribución t de Student")
@@ -30,7 +34,8 @@ def parse_args():
     return parser.parse_args()
 
 
-async def execute_simulation():
+async def execute_simulation(run_id: str | None = None):
+    actual_run_id = run_id or f"run_sim_{int(time.time())}"
     print("[*] Configurando experimento de prueba local determinista...")
     config = ExperimentConfig(
         id="sim_exp_01",
@@ -47,15 +52,17 @@ async def execute_simulation():
             "y": VariableDef(values=[-2.5, -3.0]),
         },
         replicates=2,
-        budget=BudgetPolicy(max_cases=10, max_cost_usd=1.0, timeout_seconds=30),
+        budget=BudgetPolicy(max_cases=20, max_cost_usd=1.0, timeout_seconds=30),
         security=SecurityPolicy(),
     )
 
     adapter = DeterministicSimulatorAdapter(target_x=2.0, target_y=-3.0)
-    scheduler = ExperimentScheduler(config=config, adapter=adapter)
+    signing_key = os.environ.get("BLACKBOX_EVIDENCE_HMAC_KEY") or "deterministic-simulation-ephemeral-hmac-key-32bytes"
+    evidence_store = EvidenceStore(signing_key=signing_key)
+    scheduler = ExperimentScheduler(config=config, adapter=adapter, evidence_store=evidence_store)
 
     print("[*] Ejecutando orquestador experimental...")
-    result = await scheduler.run(run_id="run_sim_local")
+    result = await scheduler.run(run_id=actual_run_id)
 
     print("--------------------------------------------------")
     print(f"Estado final: {result.state}")
@@ -77,7 +84,7 @@ def main():
         success = run_doctor()
         sys.exit(0 if success else 1)
     elif args.command == "run-simulation":
-        exit_code = asyncio.run(execute_simulation())
+        exit_code = asyncio.run(execute_simulation(run_id=args.run_id))
         sys.exit(exit_code)
     elif args.command == "inspect-metrics":
         try:

@@ -6,8 +6,12 @@ from blackbox_lab.adapters.simulator import DeterministicSimulatorAdapter
 from blackbox_lab.core.contracts import BudgetPolicy, InputObservation, RawDocument, SecurityPolicy
 from blackbox_lab.core.experiment import ExperimentConfig, Hypothesis, VariableDef
 from blackbox_lab.execution.budgets import BudgetManager, BudgetExceededError
+from blackbox_lab.execution.checkpoints import CheckpointManager
 from blackbox_lab.execution.evidence import EvidenceStore
 from blackbox_lab.execution.scheduler import ExperimentScheduler
+
+
+TEST_HMAC_KEY = "test-key-which-is-long-enough-to-sign-evidence"
 
 
 def test_budget_manager_decimal_accounting(tmp_path):
@@ -23,11 +27,11 @@ def test_budget_manager_decimal_accounting(tmp_path):
 
 
 def test_evidence_store_integrity(tmp_path):
-    store = EvidenceStore(raw_storage_dir=tmp_path / "raw")
+    store = EvidenceStore(raw_storage_dir=tmp_path / "raw", signing_key=TEST_HMAC_KEY)
     input_obs = InputObservation(raw_document=RawDocument(canonical_json='{"x": 1.0}'))
     
     adapter = DeterministicSimulatorAdapter()
-    output_obs = asyncio.run(adapter.execute(input_obs))
+    output_obs = asyncio.run(adapter.execute(input_obs, request_id="req_test"))
 
     record = store.append_record("exp_test", input_obs, output_obs)
     assert store.verify_integrity(record) is True
@@ -58,8 +62,11 @@ def test_experiment_scheduler_runs_end_to_end(tmp_path):
     scheduler = ExperimentScheduler(
         config=config,
         adapter=adapter,
-        budget_manager=BudgetManager(limit_usd=Decimal("5.00"), storage_path=tmp_path / "b.json"),
-        evidence_store=EvidenceStore(raw_storage_dir=tmp_path / "raw"),
+        budget_manager=BudgetManager(
+            limit_usd=Decimal("1.00"), max_calls=4, storage_path=tmp_path / "b.json"
+        ),
+        checkpoint_manager=CheckpointManager(storage_dir=tmp_path / "checkpoints"),
+        evidence_store=EvidenceStore(raw_storage_dir=tmp_path / "raw", signing_key=TEST_HMAC_KEY),
     )
 
     result = asyncio.run(scheduler.run("run_sched_01"))

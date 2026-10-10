@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import (
@@ -29,8 +30,30 @@ class StrictContract(BaseModel):
 class BudgetPolicy(StrictContract):
     max_cases: int = Field(..., gt=0, le=10_000, strict=True)
     max_attempts_per_case: int = Field(1, ge=1, le=10, strict=True)
-    max_cost_usd: float = Field(0.0, ge=0, le=10_000)
+    # A zero-cost protocol is allowed only for adapters that reserve and report
+    # zero.  It must never be interpreted as an unspecified five-dollar limit.
+    max_cost_usd: Decimal = Field(Decimal("0"), ge=0, le=10_000)
+    max_cost_per_attempt_usd: Decimal = Field(Decimal("0"), ge=0, le=10_000)
     timeout_seconds: int = Field(60, gt=0, le=3600, strict=True)
+
+    @field_validator("max_cost_usd", "max_cost_per_attempt_usd", mode="before")
+    @classmethod
+    def decimal_cost(cls, value):
+        try:
+            amount = Decimal(str(value))
+        except Exception as exc:
+            raise ValueError("Coste inválido.") from exc
+        if not amount.is_finite():
+            raise ValueError("El coste debe ser finito.")
+        return amount
+
+    @model_validator(mode="after")
+    def validate_cost_bounds(self):
+        if self.max_cost_per_attempt_usd > self.max_cost_usd:
+            raise ValueError(
+                "El coste máximo por intento no puede superar el presupuesto total."
+            )
+        return self
 
 
 class SecurityPolicy(StrictContract):

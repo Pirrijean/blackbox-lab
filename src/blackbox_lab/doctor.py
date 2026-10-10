@@ -49,6 +49,12 @@ def run_doctor() -> bool:
     else:
         print("[INFO] Variable OPENROUTER_API_KEY: No configurada (Modo simulacion / offline disponible)")
 
+    hmac_key = os.environ.get("BLACKBOX_EVIDENCE_HMAC_KEY")
+    if hmac_key and len(hmac_key.encode("utf-8")) >= 32:
+        print("[OK] Variable BLACKBOX_EVIDENCE_HMAC_KEY: Configurada (>= 32 bytes)")
+    else:
+        print("[INFO] Variable BLACKBOX_EVIDENCE_HMAC_KEY: No configurada (Modo simulacion usara clave local)")
+
     print("==================================================")
     if all_ok:
         print("[EXITO] Entorno de desarrollo verificado y listo para operar.")
