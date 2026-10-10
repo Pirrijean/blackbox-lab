@@ -1,8 +1,41 @@
 import pytest
 from pydantic import ValidationError
 
-from blackbox_lab.core.contracts import InputObservation, RawDocument, SecurityPolicy
+from blackbox_lab.core.contracts import (
+    BudgetPolicy,
+    InputObservation,
+    OutputObservation,
+    RawDocument,
+    SecurityPolicy,
+)
 from blackbox_lab.execution.checkpoints import ExecutionState, RunCheckpoint
+
+
+def test_payload_changes_do_not_modify_snapshot():
+    observation = InputObservation(
+        raw_document=RawDocument(
+            canonical_json='{"nested":{"value":1}}'
+        )
+    )
+
+    copy = observation.payload
+    copy["nested"]["value"] = 999
+
+    assert observation.payload["nested"]["value"] == 1
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        '{"x":NaN}',
+        '{"x":Infinity}',
+        '{"x":1,"x":2}',
+        '{"nested":{"x":1,"x":2}}',
+    ],
+)
+def test_invalid_json_is_rejected(document):
+    with pytest.raises(ValueError):
+        RawDocument(canonical_json=document)
 
 
 @pytest.mark.parametrize(
@@ -13,9 +46,28 @@ from blackbox_lab.execution.checkpoints import ExecutionState, RunCheckpoint
         "stop_on_budget_limit",
     ],
 )
-def test_security_controls_cannot_be_disabled(field):
+def test_security_cannot_be_disabled(field):
     with pytest.raises(ValidationError):
         SecurityPolicy(**{field: False})
+
+
+def test_boolean_is_not_a_case_limit():
+    with pytest.raises(ValidationError):
+        BudgetPolicy(max_cases=True)
+
+
+def test_success_requires_evidence():
+    with pytest.raises(ValidationError):
+        OutputObservation(input_id="input-1", status="success")
+
+
+def test_unknown_cost_is_not_zero():
+    output = OutputObservation(
+        input_id="input-1",
+        status="failure",
+        error_code="transport",
+    )
+    assert output.cost is None
 
 
 @pytest.mark.parametrize("value", [float("inf"), float("nan")])
@@ -30,11 +82,6 @@ def test_checkpoint_rejects_nonfinite_cost(value):
         )
 
 
-def test_raw_document_rejects_duplicate_keys():
-    with pytest.raises(ValueError):
-        RawDocument(canonical_json='{"cost": 1, "cost": 999}')
-
-
 def test_checkpoint_completed_requires_all_cases():
     with pytest.raises(ValueError):
         RunCheckpoint(
@@ -44,13 +91,3 @@ def test_checkpoint_completed_requires_all_cases():
             completed_cases=0,
             total_cases=10,
         )
-
-
-def test_input_observation_immutable_payload():
-    doc = RawDocument(canonical_json='{"temperature": 25.5}')
-    obs = InputObservation(raw_document=doc)
-    assert obs.payload == {"temperature": 25.5}
-    # Payload getter returns parsed copy, original doc remains untouched
-    p = obs.payload
-    p["temperature"] = 999
-    assert obs.payload == {"temperature": 25.5}

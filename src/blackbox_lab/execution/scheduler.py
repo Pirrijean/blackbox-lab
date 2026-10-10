@@ -86,7 +86,7 @@ class ExperimentScheduler:
 
             try:
                 output_obs = await self.adapter.execute(input_obs)
-                actual_cost = Decimal(str(output_obs.cost))
+                actual_cost = Decimal(str(output_obs.cost if output_obs.cost is not None else 0.0))
                 self.budget_manager.confirm(res_id, actual_cost)
                 total_spent += actual_cost
 
@@ -94,10 +94,11 @@ class ExperimentScheduler:
                 self.evidence_store.append_record(self.config.id, input_obs, output_obs)
 
                 # Extraer valor numérico si existe para análisis
-                if "score" in output_obs.response:
-                    collected_scores.append(float(output_obs.response["score"]))
-                elif "loss" in output_obs.response:
-                    collected_scores.append(float(output_obs.response["loss"]))
+                if output_obs.response:
+                    if "score" in output_obs.response:
+                        collected_scores.append(float(output_obs.response["score"]))
+                    elif "loss" in output_obs.response:
+                        collected_scores.append(float(output_obs.response["loss"]))
 
                 completed += 1
 

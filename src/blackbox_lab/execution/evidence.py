@@ -14,7 +14,7 @@ class EvidenceRecord(BaseModel):
     sha256_hash: str
     raw_input_json: str
     raw_output_json: str
-    cost_usd: float
+    cost_usd: Optional[float] = 0.0
     timestamp_utc: str
 
 
@@ -44,7 +44,7 @@ class EvidenceStore:
             sha256_hash=record_hash,
             raw_input_json=input_json,
             raw_output_json=output_json,
-            cost_usd=output_obs.cost,
+            cost_usd=output_obs.cost if output_obs.cost is not None else 0.0,
             timestamp_utc=output_obs.timestamp.isoformat(),
         )
 

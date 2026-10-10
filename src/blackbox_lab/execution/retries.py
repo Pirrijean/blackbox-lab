@@ -16,14 +16,15 @@ class RetryPolicy(BaseModel):
         extra="forbid",
         frozen=True,
         allow_inf_nan=False,
+        revalidate_instances="always",
     )
 
     max_retries: int = Field(2, ge=0, le=5, strict=True)
-    base_delay_seconds: float = Field(0.5, ge=0, le=10)
-    backoff_factor: float = Field(2.0, ge=1, le=3)
-    max_delay_seconds: float = Field(10.0, ge=0, le=30)
-    attempt_timeout_seconds: float = Field(10.0, gt=0, le=60)
-    total_timeout_seconds: float = Field(60.0, gt=0, le=300)
+    base_delay_seconds: float = Field(0.5, ge=0, le=10, strict=True)
+    backoff_factor: float = Field(2.0, ge=1, le=3, strict=True)
+    max_delay_seconds: float = Field(10.0, ge=0, le=30, strict=True)
+    attempt_timeout_seconds: float = Field(10.0, gt=0, le=60, strict=True)
+    total_timeout_seconds: float = Field(60.0, gt=0, le=300, strict=True)
 
 
 async def execute_with_retry(
@@ -32,6 +33,14 @@ async def execute_with_retry(
     *,
     safe_to_repeat: bool = False,
 ) -> T:
+    if type(safe_to_repeat) is not bool:
+        raise ValueError("safe_to_repeat debe ser un booleano real.")
+
+    if not isinstance(policy, RetryPolicy):
+        raise ValueError("Política de reintentos inválida.")
+
+    policy = RetryPolicy.model_validate(policy.model_dump())
+
     async with asyncio.timeout(policy.total_timeout_seconds):
         for attempt in range(policy.max_retries + 1):
             try:

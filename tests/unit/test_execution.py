@@ -101,3 +101,35 @@ def test_safe_read_has_bounded_retries():
 
     assert result == "ok"
     assert attempts == 3
+
+
+def test_safe_to_repeat_requires_strict_bool():
+    async def dummy():
+        return 1
+
+    with pytest.raises(ValueError, match="safe_to_repeat debe ser un booleano real"):
+        asyncio.run(
+            execute_with_retry(
+                dummy,
+                RetryPolicy(),
+                safe_to_repeat=1,  # int not bool
+            )
+        )
+
+
+def test_checkpoint_load_run_id_mismatch(tmp_path):
+    manager = CheckpointManager(storage_dir=str(tmp_path))
+    ckpt = RunCheckpoint(
+        experiment_id="exp-1",
+        run_id="run-actual",
+        state=ExecutionState.RUNNING,
+        completed_cases=1,
+        total_cases=2,
+    )
+    # Save manually under mismatched filename
+    fake_file = tmp_path / "run-fake.json"
+    fake_file.write_text(ckpt.model_dump_json(), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="La identidad del checkpoint no coincide"):
+        manager.load_checkpoint("run-fake")
+

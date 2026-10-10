@@ -23,24 +23,25 @@ class RunCheckpoint(BaseModel):
         extra="forbid",
         frozen=True,
         allow_inf_nan=False,
+        revalidate_instances="always",
     )
 
     experiment_id: str = Field(..., pattern=SAFE_ID_PATTERN)
     run_id: str = Field(..., pattern=SAFE_ID_PATTERN)
     state: ExecutionState
-    completed_cases: int = Field(0, ge=0)
-    total_cases: int = Field(..., ge=1)
-    current_cost: float = Field(0.0, ge=0.0, le=10_000.0)
+    completed_cases: int = Field(0, ge=0, strict=True)
+    total_cases: int = Field(..., ge=1, le=10_000, strict=True)
+    current_cost: float = Field(0.0, ge=0.0, le=10_000.0, strict=True)
 
     @model_validator(mode="after")
     def validate_cases(self) -> "RunCheckpoint":
         if self.completed_cases > self.total_cases:
-            raise ValueError("completed_cases no puede ser mayor que total_cases.")
+            raise ValueError("completed_cases supera total_cases.")
         if (
             self.state == ExecutionState.COMPLETED
             and self.completed_cases != self.total_cases
         ):
-            raise ValueError("Un checkpoint completado debe incluir todos los casos.")
+            raise ValueError("Un checkpoint completado debe cubrir todos los casos.")
         return self
 
 
@@ -82,5 +83,11 @@ class CheckpointManager:
         target_path = self._resolve_safe_path(run_id)
         if not target_path.exists():
             return None
-        with open(target_path, "r", encoding="utf-8") as f:
-            return RunCheckpoint.model_validate_json(f.read())
+        with open(target_path, "rb") as handle:
+            content = handle.read(64 * 1024 + 1)
+        if len(content) > 64 * 1024:
+            raise ValueError("Checkpoint demasiado grande.")
+        checkpoint = RunCheckpoint.model_validate_json(content)
+        if checkpoint.run_id != run_id:
+            raise ValueError("La identidad del checkpoint no coincide.")
+        return checkpoint
