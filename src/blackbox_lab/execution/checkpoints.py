@@ -19,19 +19,28 @@ class ExecutionState(str, Enum):
 
 
 class RunCheckpoint(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        allow_inf_nan=False,
+    )
 
     experiment_id: str = Field(..., pattern=SAFE_ID_PATTERN)
     run_id: str = Field(..., pattern=SAFE_ID_PATTERN)
     state: ExecutionState
     completed_cases: int = Field(0, ge=0)
     total_cases: int = Field(..., ge=1)
-    current_cost: float = Field(0.0, ge=0.0)
+    current_cost: float = Field(0.0, ge=0.0, le=10_000.0)
 
     @model_validator(mode="after")
     def validate_cases(self) -> "RunCheckpoint":
         if self.completed_cases > self.total_cases:
             raise ValueError("completed_cases no puede ser mayor que total_cases.")
+        if (
+            self.state == ExecutionState.COMPLETED
+            and self.completed_cases != self.total_cases
+        ):
+            raise ValueError("Un checkpoint completado debe incluir todos los casos.")
         return self
 
 

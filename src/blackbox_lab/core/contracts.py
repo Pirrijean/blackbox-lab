@@ -16,11 +16,12 @@ class BudgetPolicy(BaseModel):
 
 
 class SecurityPolicy(BaseModel):
+    """Controles obligatorios no desactivables (Fase 6)."""
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    authorization_required: bool = True
-    data_redaction: bool = True
-    stop_on_budget_limit: bool = True
+    authorization_required: Literal[True] = True
+    data_redaction: Literal[True] = True
+    stop_on_budget_limit: Literal[True] = True
 
 
 class RawDocument(BaseModel):
@@ -42,7 +43,19 @@ class RawDocument(BaseModel):
         def reject_constant(_):
             raise ValueError("JSON con valor no finito.")
 
-        document = json.loads(value, parse_constant=reject_constant)
+        def reject_duplicate_keys(pairs):
+            result = {}
+            for key, val in pairs:
+                if key in result:
+                    raise ValueError(f"JSON con claves duplicadas: '{key}'.")
+                result[key] = val
+            return result
+
+        document = json.loads(
+            value,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        )
         return json.dumps(
             document,
             ensure_ascii=False,
@@ -56,9 +69,15 @@ class InputObservation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    raw_document: Optional[RawDocument] = None
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    raw_document: RawDocument
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def payload(self) -> dict[str, Any]:
+        document = json.loads(self.raw_document.canonical_json)
+        if not isinstance(document, dict):
+            raise ValueError("La entrada debe ser un objeto JSON.")
+        return document
 
 
 class OutputObservation(BaseModel):
@@ -66,9 +85,17 @@ class OutputObservation(BaseModel):
 
     input_id: str
     raw_document: Optional[RawDocument] = None
-    response: Dict[str, Any] = Field(default_factory=dict)
     status: Literal["success", "failure", "blocked", "timeout"] = "success"
     error_details: Optional[str] = None
     cost: float = Field(0.0, ge=0.0)
     duration_ms: int = Field(0, ge=0)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def response(self) -> dict[str, Any]:
+        if self.raw_document is None:
+            return {}
+        document = json.loads(self.raw_document.canonical_json)
+        if not isinstance(document, dict):
+            raise ValueError("La respuesta debe ser un objeto JSON.")
+        return document

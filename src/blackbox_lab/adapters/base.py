@@ -3,6 +3,7 @@ from blackbox_lab.core.contracts import InputObservation, OutputObservation
 
 class TargetAdapter(ABC):
     @abstractmethod
-    def execute(self, observation: InputObservation) -> OutputObservation:
-        """Ejecuta la consulta autorizada contra la caja negra."""
+    async def execute(self, observation: InputObservation) -> OutputObservation:
+        """Ejecuta la consulta autorizada contra la caja negra de forma asíncrona."""
         pass
+
