@@ -1,0 +1,18 @@
+{
+  "id": "quadratic",
+  "version": "1.0",
+  "objective": "Caracterizar una función numérica mediante entradas controladas sin revisión humana.",
+  "hypothesis": "El resultado crece con la magnitud de las variables.",
+  "variables": {
+    "x": [-3, -2, -1, 0, 1, 2, 3]
+  },
+  "method": "controlled",
+  "seed": 42,
+  "replicates": 2,
+  "max_cases": 14,
+  "target": {
+    "kind": "simulator"
+  },
+  "metric_key": "value",
+  "direction": "minimize"
+}
