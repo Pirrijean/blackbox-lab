@@ -1,0 +1,13 @@
+{
+    "skill_name": "experiment_metrics_db",
+    "description": "Base de datos local para guardar la configuración del experimento, variables manipuladas, métricas primarias y checkpoints de recuperación.",
+    "type": "mcp_server",
+    "execution": {
+        "command": "uvx",
+        "args": [
+            "mcp-server-sqlite",
+            "--db-path",
+            "./data/experiments.db"
+        ]
+    }
+}

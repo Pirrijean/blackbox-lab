@@ -1,0 +1,16 @@
+{
+    "skill_name": "optuna_bayesian_optimizer",
+    "description": "Ejecuta algoritmos de optimización de caja negra para proponer el siguiente experimento, aislado en Docker.",
+    "type": "mcp_server",
+    "execution": {
+        "command": "docker",
+        "args": [
+            "run",
+            "-i",
+            "--rm",
+            "-v",
+            "./data:/app/data",
+            "ghcr.io/optuna/optuna-mcp:latest"
+        ]
+    }
+}

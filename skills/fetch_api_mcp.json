@@ -1,0 +1,11 @@
+{
+    "skill_name": "blackbox_api_adapter",
+    "description": "Realiza peticiones HTTP (GET, POST) a APIs o servicios externos para recopilar datos experimentales sin ejecutar código arbitrario.",
+    "type": "mcp_server",
+    "execution": {
+        "command": "uvx",
+        "args": [
+            "mcp-server-fetch"
+        ]
+    }
+}
