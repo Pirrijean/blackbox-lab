@@ -1,24 +1,70 @@
-from pydantic import BaseModel
+import math
+from typing import Literal
+
 import numpy as np
+from pydantic import BaseModel, ConfigDict
+from scipy.stats import t
+
 
 class MetricResult(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        allow_inf_nan=False,
+    )
+
+    n: int
     mean: float
-    std_dev: float
-    confidence_interval_95: tuple[float, float]
-    
+    std_dev: float | None
+    confidence_interval_95: tuple[float, float] | None
+    method: Literal["student_t"]
+    limitation: str | None = None
+
+
 def calculate_metrics(values: list[float]) -> MetricResult:
-    """Calcula la incertidumbre y métricas en lugar de asumir respuestas exactas."""
     if not values:
-        return MetricResult(mean=0.0, std_dev=0.0, confidence_interval_95=(0.0, 0.0))
-        
-    mean = np.mean(values)
-    std_dev = np.std(values, ddof=1) if len(values) > 1 else 0.0
-    
-    # 95% CI roughly mean +/- 1.96 * (std / sqrt(n))
-    margin = 1.96 * (std_dev / np.sqrt(len(values))) if len(values) > 1 else 0.0
-    
+        raise ValueError("No hay observaciones para calcular métricas.")
+
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        for value in values
+    ):
+        raise ValueError("Se requieren valores numéricos finitos.")
+
+    data = np.asarray(values, dtype=float)
+    n = len(data)
+    mean = float(data.mean())
+
+    if not math.isfinite(mean):
+        raise ValueError("Desbordamiento numérico al calcular la media.")
+
+    if n == 1:
+        return MetricResult(
+            n=1,
+            mean=mean,
+            std_dev=None,
+            confidence_interval_95=None,
+            method="student_t",
+            limitation="Una observación no permite estimar la variabilidad.",
+        )
+
+    std_dev = float(data.std(ddof=1))
+    margin = float(t.ppf(0.975, df=n - 1)) * std_dev / math.sqrt(n)
+    lower, upper = mean - margin, mean + margin
+
+    if not all(math.isfinite(v) for v in (std_dev, lower, upper)):
+        raise ValueError("Desbordamiento numérico en la incertidumbre.")
+
     return MetricResult(
-        mean=float(mean),
-        std_dev=float(std_dev),
-        confidence_interval_95=(float(mean - margin), float(mean + margin))
+        n=n,
+        mean=mean,
+        std_dev=std_dev,
+        confidence_interval_95=(lower, upper),
+        method="student_t",
+        limitation=(
+            "Requiere observaciones independientes y supuestos apropiados "
+            "para inferencia sobre la media. No corrige multiplicidad."
+        ),
     )

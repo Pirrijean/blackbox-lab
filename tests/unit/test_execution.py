@@ -1,36 +1,103 @@
+import asyncio
 import pytest
-from blackbox_lab.execution.checkpoints import CheckpointManager, RunCheckpoint, ExecutionState
-from blackbox_lab.execution.retries import execute_with_retry, RetryPolicy
+from blackbox_lab.execution.checkpoints import (
+    CheckpointManager,
+    ExecutionState,
+    RunCheckpoint,
+)
+from blackbox_lab.execution.retries import (
+    RetryPolicy,
+    TransientReadError,
+    execute_with_retry,
+)
 
-def test_checkpoint_save_load(tmp_path):
+
+def test_checkpoint_save_load_and_traversal(tmp_path):
     manager = CheckpointManager(storage_dir=str(tmp_path))
     ckpt = RunCheckpoint(
         experiment_id="exp-1",
         run_id="run-1",
         state=ExecutionState.RUNNING,
-        total_cases=10
+        completed_cases=5,
+        total_cases=10,
     )
-    # Probar escritura segura
+    # Probar escritura atómica
     manager.save_checkpoint(ckpt)
-    
+
     # Probar recuperación
     loaded = manager.load_checkpoint("run-1")
     assert loaded is not None
     assert loaded.state == ExecutionState.RUNNING
+    assert loaded.completed_cases == 5
     assert loaded.total_cases == 10
 
-def test_execute_with_retry():
+    # Probar rechazo de path traversal
+    with pytest.raises(ValueError):
+        manager.load_checkpoint("../../etc/passwd")
+
+
+def test_checkpoint_cases_validation():
+    with pytest.raises(ValueError):
+        RunCheckpoint(
+            experiment_id="exp-1",
+            run_id="run-1",
+            state=ExecutionState.RUNNING,
+            completed_cases=11,  # Mayor que total_cases
+            total_cases=10,
+        )
+
+
+def test_validation_error_is_not_retried():
     attempts = 0
-    def faulty_func():
+
+    async def invalid():
+        nonlocal attempts
+        attempts += 1
+        raise ValueError("Entrada inválida")
+
+    with pytest.raises(ValueError):
+        asyncio.run(
+            execute_with_retry(
+                invalid,
+                RetryPolicy(),
+                safe_to_repeat=True,
+            )
+        )
+
+    assert attempts == 1
+
+
+def test_uncertain_operation_is_not_retried():
+    attempts = 0
+
+    async def operation():
+        nonlocal attempts
+        attempts += 1
+        raise TransientReadError("Resultado desconocido")
+
+    with pytest.raises(TransientReadError):
+        asyncio.run(execute_with_retry(operation, RetryPolicy()))
+
+    assert attempts == 1
+
+
+def test_safe_read_has_bounded_retries():
+    attempts = 0
+
+    async def read():
         nonlocal attempts
         attempts += 1
         if attempts < 3:
-            raise ValueError("Fallo transitorio simulado")
-        return "Éxito tras recuperación"
+            raise TransientReadError("Fallo temporal")
+        return "ok"
 
-    policy = RetryPolicy(max_retries=3, base_delay_seconds=0.01)
-    result = execute_with_retry(faulty_func, policy)
-    
-    # Verifica que superó el error transitorio y retomó la ejecución
-    assert result == "Éxito tras recuperación"
+    result = asyncio.run(
+        execute_with_retry(
+            read,
+            RetryPolicy(max_retries=2, base_delay_seconds=0),
+            safe_to_repeat=True,
+        )
+    )
+
+    assert result == "ok"
     assert attempts == 3
